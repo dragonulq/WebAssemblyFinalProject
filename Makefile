@@ -25,5 +25,5 @@ all: module runner
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
-	$(RM) -f wasm-runner
+	$(RM) -f wasm-launcher
 
