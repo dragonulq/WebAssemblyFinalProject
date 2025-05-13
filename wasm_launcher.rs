@@ -4,9 +4,9 @@ use wasmtime::{Engine, Func, Linker, Instance, Module, Store, Caller, Config};
 use wasmtime_wasi::WasiP1Ctx;
 use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::preview1::add_to_linker_sync;
+use wasmtime_wasi::I32Exit;
 
 fn main() -> Result<()> {
-
 
     let mut args = env::args();
     let prog = args.next().expect("argv[0] missing");
@@ -57,8 +57,23 @@ fn main() -> Result<()> {
 
 
     println!("Calling export…");
-    _start.call(&mut store, &[], &mut [])
-        .context("failed to call `_start`")?;
+
+    match _start.call(&mut store, &[], &mut []) {
+        Ok(()) => {
+            println!("Module exited normally");
+        }
+        Err(e) => {
+
+            if let Some(exit) = e.downcast_ref::<I32Exit>() {
+                let code = exit.0;
+                println!("guest exited with status {code}");
+                std::process::exit(code as i32);
+            } else {
+                return Err(e).context("failed to run guest")?;
+            }
+        }
+    }
+
 
     println!("All finished!");
     Ok(())
