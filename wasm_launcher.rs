@@ -1,41 +1,12 @@
 use anyhow::{anyhow, Context, Result};
 use std::{env, fs, process};
-use wasmtime::{Engine, Func, Instance, Module, Store, Val, Caller, FuncType};
-fn prepare_wasm_args(
-    func_ty: &FuncType,
-    raw_args: impl Iterator<Item = String>,
-) -> Result<Vec<Val>> {
-
-    let param_tys = func_ty.params();
-
-    // Convert each argument based on expected type
-    let mut converted = Vec::new();
-    for (i, (arg, ty)) in raw_args.zip(param_tys).enumerate() {
-        converted.push(match ty {
-            wasmtime::ValType::I32 => Val::I32(arg.parse().context(format!(
-                "Argument {} (`{}`) must be an i32",
-                i + 1, arg
-            ))?),
-            wasmtime::ValType::I64 => Val::I64(arg.parse().context(format!(
-                "Argument {} (`{}`) must be an i64",
-                i + 1, arg
-            ))?),
-            wasmtime::ValType::F32 => Val::F32(arg.parse().context(format!(
-                "Argument {} (`{}`) must be an f32",
-                i + 1, arg
-            ))?),
-            wasmtime::ValType::F64 => Val::F64(arg.parse().context(format!(
-                "Argument {} (`{}`) must be an f64",
-                i + 1, arg
-            ))?),
-            _ =>  return Err(anyhow!("Passed argument (`{}`) is not supported", arg)),
-        });
-    }
-
-    Ok(converted)
-}
+use wasmtime::{Engine, Func, Linker, Instance, Module, Store, Caller, Config};
+use wasmtime_wasi::WasiP1Ctx;
+use wasmtime_wasi::WasiCtxBuilder;
+use wasmtime_wasi::preview1::add_to_linker_sync;
 
 fn main() -> Result<()> {
+
 
     let mut args = env::args();
     let prog = args.next().expect("argv[0] missing");
@@ -51,12 +22,9 @@ fn main() -> Result<()> {
         }
     };
 
-
-    println!("Initializing…");
-    println!("Arg 1 (wasm): {}", wasm_path.display());
-
-    let engine = Engine::default();
-    let mut store = Store::new(&engine, ());
+    let argv: Vec<String> = env::args().skip(1).collect();
+    let mut config = Config::new();
+    let engine = wasmtime::Engine::new(&config)?;
 
 
     let wasm_bytes = fs::read(&wasm_path)
@@ -67,17 +35,19 @@ fn main() -> Result<()> {
         .context("failed to compile module")?;
 
 
-    println!("Creating callback…");
+    let mut linker: Linker<WasiP1Ctx> = Linker::new(&engine);
+    add_to_linker_sync(&mut linker, |t| t)?;
+    let pre = linker.instantiate_pre(&module)?;
 
-    let hello = Func::wrap(&mut store, |_caller: Caller<'_, ()>, arg1: i32, arg2: i32| {
-        println!("Calling back…");
-        println!("> Hello World From WASM module!");
-        println!("Sum of {:?} and {:?}", arg1, arg2);
-    });
+    let mut wasi_ctx_builder = WasiCtxBuilder::new();
+    let wasi_ctx = (&mut wasi_ctx_builder)
+        .inherit_stdio()
+        .args(&argv)
+        .build_p1();
 
-    println!("Instantiating module…");
-    let instance = Instance::new(&mut store, &module, &[hello.into()])
-        .context("failed to instantiate")?;
+
+    let mut store = Store::new(&engine, wasi_ctx);
+    let instance = linker.instantiate(&mut store, &module)?;
 
 
     println!("Extracting export…");
@@ -85,12 +55,9 @@ fn main() -> Result<()> {
         .get_func(&mut store, "_start")
         .ok_or_else(|| anyhow!("export `_start` not found"))?;
 
-    let _start_ty = _start.ty(&mut store);
-
-    let wasm_args = prepare_wasm_args(&_start_ty, args)?;
 
     println!("Calling export…");
-    _start.call(&mut store, &wasm_args, &mut [])
+    _start.call(&mut store, &[], &mut [])
         .context("failed to call `_start`")?;
 
     println!("All finished!");
