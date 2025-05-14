@@ -1,10 +1,12 @@
 use anyhow::{anyhow, Context, Result};
 use std::{env, fs, process};
-use wasmtime::{Engine, Func, Linker, Instance, Module, Store, Caller, Config};
+use wasmtime::{Linker, Module, Store, Config};
 use wasmtime_wasi::WasiP1Ctx;
 use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::preview1::add_to_linker_sync;
 use wasmtime_wasi::I32Exit;
+mod helpers;
+use helpers::dependency_order;
 
 fn main() -> Result<()> {
 
@@ -23,21 +25,12 @@ fn main() -> Result<()> {
     };
 
     let argv: Vec<String> = env::args().skip(1).collect();
-    let mut config = Config::new();
+    let config = Config::new();
     let engine = wasmtime::Engine::new(&config)?;
-
-
-    let wasm_bytes = fs::read(&wasm_path)
-        .with_context(|| format!("failed to read {}", wasm_path.display()))?;
-
-    println!("Compiling module…");
-    let module = Module::from_binary(&engine, &wasm_bytes)
-        .context("failed to compile module")?;
 
 
     let mut linker: Linker<WasiP1Ctx> = Linker::new(&engine);
     add_to_linker_sync(&mut linker, |t| t)?;
-    let pre = linker.instantiate_pre(&module)?;
 
     let mut wasi_ctx_builder = WasiCtxBuilder::new();
     let wasi_ctx = (&mut wasi_ctx_builder)
@@ -47,16 +40,27 @@ fn main() -> Result<()> {
 
 
     let mut store = Store::new(&engine, wasi_ctx);
+    let modules_to_be_instantiated = dependency_order(&engine, &wasm_path.as_path())?;
+
+    let modules_to_be_instantiated_len = modules_to_be_instantiated.len();
+    for (i, (module_name, module_path)) in modules_to_be_instantiated.iter().enumerate() {
+        if i == modules_to_be_instantiated_len - 1 {
+            break;
+        }
+        let module = Module::from_file(&engine, &module_path)
+            .with_context(|| format!("Could not compile {}", module_path.display()))?;
+        let instance = linker.instantiate(&mut store, &module)?;
+
+        linker.instance(&mut store, &module_name, instance)?;
+
+    }
+
+    let module = Module::from_file(&engine, &wasm_path)?;
     let instance = linker.instantiate(&mut store, &module)?;
 
-
-    println!("Extracting export…");
     let _start = instance
         .get_func(&mut store, "_start")
         .ok_or_else(|| anyhow!("export `_start` not found"))?;
-
-
-    println!("Calling export…");
 
     match _start.call(&mut store, &[], &mut []) {
         Ok(()) => {
@@ -74,7 +78,5 @@ fn main() -> Result<()> {
         }
     }
 
-
-    println!("All finished!");
     Ok(())
 }
