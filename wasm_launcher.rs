@@ -1,12 +1,14 @@
 use anyhow::{anyhow, Context, Result};
 use std::{env, fs, process};
-use wasmtime::{Linker, Module, Store, Config};
+use wasmtime::{Linker, Module, Store, Config, ExternType, Memory, Table, Ref, Global};
 use wasmtime_wasi::WasiP1Ctx;
 use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::preview1::add_to_linker_sync;
 use wasmtime_wasi::I32Exit;
 mod helpers;
 use helpers::dependency_order;
+use helpers::collect_env_imports;
+use helpers::zero_for;
 
 fn main() -> Result<()> {
 
@@ -49,6 +51,54 @@ fn main() -> Result<()> {
         }
         let module = Module::from_file(&engine, &module_path)
             .with_context(|| format!("Could not compile {}", module_path.display()))?;
+
+
+        for (name, ty) in collect_env_imports(&module) {
+            match ty {
+
+                ExternType::Memory(mt) => {
+                    let mem = Memory::new(&mut store, mt)?;
+                    linker.define(&store, "env", &name, mem)?;
+                }
+
+                ExternType::Table(tt) => {
+                    let init = Ref::Func(None);
+                    let table = Table::new(&mut store, tt, init)?;
+                    linker.define(&store, "env", &name, table)?;
+                }
+
+                ExternType::Global(gt) => {
+                    if let Some(extern_instance) = linker.get(&mut store, "env", &name) {
+
+                        match extern_instance.into_global() {
+                            None => anyhow::bail!("type mismatch for env::{name}: module expects GlobalType but host provided something else!"),
+                            _ => {}
+                        }
+
+                    } else {
+                        let glob = &gt.content();
+                        let val = zero_for(&glob);
+                        let new_glob = Global::new(&mut store, gt, val)?;
+                        linker.define(&store, "env", &name, new_glob)?;
+                    }
+                }
+
+                ExternType::Func(_ft) => {
+                    if let Some(extern_instance) = linker.get(&mut store, "env", &name) {
+
+                        match extern_instance.into_func() {
+                            None => anyhow::bail!("type mismatch for env::{name}: module expects FuncType but host provided something else!"),
+                            _ => {}
+                        }
+
+                    } else {
+                        anyhow::bail!("Providing implementations for random functions not ready yet!");
+                    }
+                }
+
+            }
+        }
+
         let instance = linker.instantiate(&mut store, &module)?;
 
         linker.instance(&mut store, &module_name, instance)?;

@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::{
     path::{Path, PathBuf},
 };
-use wasmtime::{Engine, Module};
+use wasmtime::{Engine, Module, ExternType, ValType, Val};
 
 pub fn dependency_order(engine: &Engine, root: &Path) -> Result<Vec<(String, PathBuf)>> {
     dfs(engine, root)
@@ -29,5 +29,23 @@ fn dfs(engine: &Engine, path: &Path) -> Result<Vec<(String, PathBuf)>> {
         .to_string();
     list.push((name, path.to_path_buf()));
     Ok(list)
+}
+
+pub fn collect_env_imports(module: &Module) -> Vec<(String, ExternType)> {
+    module
+        .imports()
+        .filter(|imp| imp.module() == "env")
+        .map(|imp| (imp.name().to_string(), imp.ty().clone()))
+        .collect()
+}
+
+pub fn zero_for(ty: &ValType) -> Val {
+    match ty {
+        ValType::I32 => Val::I32(0),
+        ValType::I64 => Val::I64(0),
+        ValType::F32 => Val::F32(0),
+        ValType::F64 => Val::F64(0),
+        other => panic!("unsupported global type {other:?}"),
+    }
 }
 
