@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use std::{
     path::{Path, PathBuf},
 };
+use std::collections::HashSet;
 use wasmtime::{Engine, Module, ExternType, ValType, Val};
 
 pub fn dependency_order(engine: &Engine, root: &Path) -> Result<Vec<(String, PathBuf)>> {
@@ -32,6 +33,7 @@ fn dfs(engine: &Engine, path: &Path) -> Result<Vec<(String, PathBuf)>> {
 }
 
 pub fn collect_env_imports(module: &Module) -> Vec<(String, ExternType)> {
+
     module
         .imports()
         .filter(|imp| imp.module() == "env")
@@ -47,5 +49,19 @@ pub fn zero_for(ty: &ValType) -> Val {
         ValType::F64 => Val::F64(0),
         other => panic!("unsupported global type {other:?}"),
     }
+}
+
+pub fn remove_duplicates(vec: Vec<(String, PathBuf)>) -> Vec<(String, PathBuf)> {
+    let mut seen_strings = HashSet::new();
+    vec.into_iter()
+        .filter(|(s, _)| {
+            if seen_strings.contains(s) {
+                false
+            } else {
+                seen_strings.insert(s.clone());
+                true
+            }
+        })
+        .collect()
 }
 

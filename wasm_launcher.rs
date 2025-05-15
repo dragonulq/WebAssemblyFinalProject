@@ -9,6 +9,7 @@ mod helpers;
 use helpers::dependency_order;
 use helpers::collect_env_imports;
 use helpers::zero_for;
+use helpers::remove_duplicates;
 
 fn main() -> Result<()> {
 
@@ -45,13 +46,12 @@ fn main() -> Result<()> {
     let modules_to_be_instantiated = dependency_order(&engine, &wasm_path.as_path())?;
 
     let modules_to_be_instantiated_len = modules_to_be_instantiated.len();
+    let mut instance = None;
+    let modules_to_be_instantiated = remove_duplicates(modules_to_be_instantiated);
     for (i, (module_name, module_path)) in modules_to_be_instantiated.iter().enumerate() {
-        if i == modules_to_be_instantiated_len - 1 {
-            break;
-        }
+
         let module = Module::from_file(&engine, &module_path)
             .with_context(|| format!("Could not compile {}", module_path.display()))?;
-
 
         for (name, ty) in collect_env_imports(&module) {
             match ty {
@@ -99,14 +99,20 @@ fn main() -> Result<()> {
             }
         }
 
-        let instance = linker.instantiate(&mut store, &module)?;
-
-        linker.instance(&mut store, &module_name, instance)?;
-
+        instance = Some(linker.instantiate(&mut store, &module)?);
+        if i <= modules_to_be_instantiated_len - 1 {
+            let unwrapped_instance = match instance {
+                Some(i) => i,
+                None => anyhow::bail!("Ended up with None value for instance"),
+            };
+            linker.instance(&mut store, &module_name, unwrapped_instance)?;
+        }
     }
 
-    let module = Module::from_file(&engine, &wasm_path)?;
-    let instance = linker.instantiate(&mut store, &module)?;
+    let instance = match instance {
+        Some(i) => i,
+        None => anyhow::bail!("Ended up with None value for instance"),
+    };
 
     let _start = instance
         .get_func(&mut store, "_start")
