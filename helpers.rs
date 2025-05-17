@@ -16,7 +16,7 @@ fn dfs(engine: &Engine, path: &Path) -> Result<Vec<(String, PathBuf)>> {
 
     let mut list = Vec::<(String, PathBuf)>::new();
     for imp in module.imports() {
-        if imp.module() == "wasi_snapshot_preview1" || imp.module() == "env" {
+        if imp.module() == "wasi_snapshot_preview1" || imp.module() == "env"  || imp.module() == "host"{
             continue;
         }
         let dep = path.with_file_name(format!("{}.wasm", imp.module()));
