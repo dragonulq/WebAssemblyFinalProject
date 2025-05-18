@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use std::sync::{Mutex, OnceLock};
 use std::{env, fs, process};
-use wasmtime::{AsContextMut, Caller, Engine, Func, Linker, Module, Store, Instance};
+use wasmtime::{AsContextMut, Caller, Engine, Func, Linker, Module, Store, Instance, Val};
 use wasmtime_wasi::preview1::add_to_linker_sync;
 use wasmtime_wasi::I32Exit;
 use wasmtime_wasi::WasiCtxBuilder;
@@ -76,7 +76,21 @@ fn main() -> Result<()> {
                 let engine = &GLOBAL_OBJECTS.engine;
                 let module = Module::from_file(engine, "test-dlopen.wasm").unwrap();
                 let instance = linker.instantiate(store, &module).unwrap();
-                
+                let result;
+                let option_func = instance.get_func(caller.as_context_mut(), "mul_by_3");
+                let mut params = [Val::I32(177)];
+                let mut results:Vec<Val> = Vec::new();
+                results.push(Val::I32(0));
+                match  option_func{
+                    Some(func) => {result = func.call(caller.as_context_mut(), &params, &mut results)},
+                    None => {return -1;}
+                }
+                match results[0] {
+                    Val::I32(531) => {println!("Got expected value back")}, 
+                    Val::I32(x) => {println!("Got {} back", x)},
+                    _ => {}
+                    
+                }
                 println!("host_dlopen called with ptr={}, flags={}", ptr, flags);
                 70
             },
