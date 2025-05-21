@@ -49,7 +49,7 @@ pub fn remove_duplicates(vec: Vec<(String, PathBuf)>) -> Vec<(String, PathBuf)> 
 
 pub fn get_instance_memory_copy(caller: &mut Caller<'_, WasiP1Ctx>) -> Memory {
     match caller.get_export("memory") {
-        Some(Extern::Memory(memory)) => memory.clone(),
+        Some(Extern::Memory(memory)) => memory.clone(),  //TODO see if we cant return just a & to Memory 
         _ => panic!("missing memory export!")
     }
 }

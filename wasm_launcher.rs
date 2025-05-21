@@ -15,6 +15,17 @@ struct GlobalWasmCtx {
     linker: Mutex<Linker<WasiP1Ctx>>,
 }
 
+struct Instances {
+    instances: Mutex<Vec<Instance>>,
+}
+
+impl Instances {
+    fn new() -> Self {
+        let instances = Vec::new();
+        Self {instances: Mutex::new(instances)}
+    }
+}
+
 impl GlobalWasmCtx {
     fn new() -> Self {
         let engine = Engine::default();
@@ -31,6 +42,13 @@ fn get_global_objects() -> &'static GlobalWasmCtx {
     static GLOBAL_OBJECTS: OnceLock<GlobalWasmCtx> = OnceLock::new();
     GLOBAL_OBJECTS.get_or_init(|| GlobalWasmCtx::new())
 }
+
+fn get_instances() -> &'static Instances {
+    static INSTANCES: OnceLock<Instances> = OnceLock::new();
+    INSTANCES.get_or_init(|| Instances::new())
+}
+
+//TODO start refactoring logic out of main()
 fn main() -> Result<()> {
     let mut args = env::args();
     let prog = args.next().expect("argv[0] missing");
@@ -69,11 +87,16 @@ fn main() -> Result<()> {
             store.as_context_mut(),
             |mut caller: Caller<'_, WasiP1Ctx>, ptr: i32, library_len: i32| -> i32 {
                 let global_objects = get_global_objects();
+                let instances = get_instances();
                 let linker_guard = &mut global_objects.linker.lock().unwrap();
                 let linker: &mut Linker<WasiP1Ctx> = &mut *linker_guard;
                 let memory = get_instance_memory_copy(&mut caller);
                 let store = caller.as_context_mut();
                 let engine = &global_objects.engine;
+                
+                
+                let instances_guard = &mut instances.instances.lock().unwrap();
+                let instances = &mut *instances_guard;
                 
                 let mut backing_array = [0u8; LIBRARY_PATH_MAX_LENGTH as usize];
 
@@ -94,9 +117,15 @@ fn main() -> Result<()> {
                 };
                 println!("Loaded library: {}", &library_name);
                 let module = Module::from_file(engine, &library_name).unwrap();
-                let instance = linker.instantiate(store, &module).unwrap();
+                let instance = linker.instantiate(store, &module).unwrap(); // TODO we need to first instantiate its requirements
+                instances.push(instance);
+                let option_func = instance.get_func(caller.as_context_mut(), "mul_by_3");
                 
-                let option_func = instance.get_func(caller.as_context_mut(), "mul_by_3").unwrap();
+                if option_func.is_none() {
+                    return (instances.len() - 1) as i32;
+                }
+                let option_func = option_func.unwrap();
+                
                 let params = [Val::I32(177)];
                 let mut results:Vec<Val> = Vec::new();
                 results.push(Val::I32(0));
@@ -113,7 +142,7 @@ fn main() -> Result<()> {
 
                 }
                 println!("host_dlopen called with ptr={}, flags={}", ptr, library_len);
-                70
+                (instances.len() - 1) as i32
             },
         );
         linker.define(store.as_context_mut(), "host", "host_dlopen", dlopen_func)?;
