@@ -9,7 +9,7 @@ use wasmtime_wasi::WasiP1Ctx;
 mod helpers;
 mod dl_functions;
 
-use dl_functions::{make_wasm_dlopen};
+use dl_functions::{make_wasm_dlopen, make_wasm_dlcall};
 use helpers::{dependency_order, remove_duplicates, get_instance_memory_copy};
 
 struct GlobalWasmCtx {
@@ -85,8 +85,10 @@ fn main() -> Result<()> {
 
         let modules_to_be_instantiated = dependency_order(&engine, &wasm_path.as_path())?;
         let dlopen_func = make_wasm_dlopen(&mut store);
+        let dlcall_func = make_wasm_dlcall(&mut store);
                 
         linker.define(store.as_context_mut(), "host", "wasm_dlopen", dlopen_func)?;
+        linker.define(store.as_context_mut(), "host", "wasm_dlcall", dlcall_func)?;
 
         let modules_to_be_instantiated_len = modules_to_be_instantiated.len();
         let mut instance = None;

@@ -17,8 +17,12 @@ int safe_size_t_to_int(size_t value) {
 
 
 extern "C"
-int wasm_dlopen(const char* path, int flags)
+int wasm_dlopen(const char* path, int path_length)
     __attribute__((import_module("host"), import_name("wasm_dlopen")));
+
+extern "C"
+int wasm_dlcall(int handle, const char* symbol, int symbol_length)
+    __attribute__((import_module("host"), import_name("wasm_dlcall")));
 
 
 int main(int argc, char** argv)
@@ -40,7 +44,12 @@ int main(int argc, char** argv)
 //        std::printf("acc is %d\n", acc);
 
         const char *library_name1 = "test-dlopen.wasm";
-        printf("host_dlopen called without errors and the returned handle is %d!\n", wasm_dlopen(library_name1, safe_size_t_to_int(std::strlen(library_name1))));
+        const char *symbol_to_call = "mul_by_3";
+        int first_handle = wasm_dlopen(library_name1, safe_size_t_to_int(std::strlen(library_name1)));
+        printf("host_dlopen called without errors and the returned handle is %d!\n", first_handle);
+        int result_dlcall = wasm_dlcall(first_handle, symbol_to_call, safe_size_t_to_int(std::strlen(symbol_to_call)));
+        printf("Result of dlcall in C++ code is %d\n", result_dlcall);
+
 
         const char *library_name2 = "mult.wasm";
         printf("host_dlopen called without errors and the returned handle is %d!\n", wasm_dlopen(library_name2, safe_size_t_to_int(std::strlen(library_name2))));
