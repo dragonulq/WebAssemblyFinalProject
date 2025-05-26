@@ -10,7 +10,7 @@ mod helpers;
 mod dl_functions;
 
 use dl_functions::{make_wasm_dlopen, make_wasm_dlcall};
-use helpers::{dependency_order, remove_duplicates, get_instance_memory_copy};
+use helpers::{dependency_order, remove_duplicates, get_name_from_memory};
 
 struct GlobalWasmCtx {
     engine: Engine,

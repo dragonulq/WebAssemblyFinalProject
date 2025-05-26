@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use std::collections::HashSet;
-use wasmtime::{Engine, Module, Extern, Caller, Memory};
+use wasmtime::{Engine, Module, Extern, Caller, AsContext};
 use wasmtime_wasi::WasiP1Ctx;
 
 pub fn dependency_order(engine: &Engine, root: &Path) -> Result<Vec<(String, PathBuf)>> {
@@ -47,10 +47,27 @@ pub fn remove_duplicates(vec: Vec<(String, PathBuf)>) -> Vec<(String, PathBuf)> 
         .collect()
 }
 
-pub fn get_instance_memory_copy(caller: &mut Caller<'_, WasiP1Ctx>) -> Memory {
-    match caller.get_export("memory") {
-        Some(Extern::Memory(memory)) => memory.clone(),  //TODO see if we cant return just a & to Memory 
+pub fn get_name_from_memory(caller: &mut Caller<'_, WasiP1Ctx>, ptr: i32, name_len: i32) -> String {
+    
+    const NAME_MAX_LENGTH: i32 = 4096;
+
+    let mut backing_array = [0u8; NAME_MAX_LENGTH as usize];
+    let buffer: &mut [u8] = &mut backing_array[0..name_len as usize];
+    
+    let memory =  match caller.get_export("memory") {
+        Some(Extern::Memory(memory)) => memory.clone(),   // clone the reference to it 
         _ => panic!("missing memory export!")
+    };
+    
+    match memory.read(caller.as_context(), ptr as usize, buffer) {
+        Ok(()) => {},
+        _ => panic!("Something went wrong while reading guest memory to get library name!")
     }
+
+    match std::str::from_utf8(&buffer[..name_len as usize]) {
+        Ok(s) => s.to_string(),
+        Err(_) => panic!("Could not convert buffer to string!"),
+    }
+ 
 }
 
