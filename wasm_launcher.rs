@@ -1,3 +1,6 @@
+use wasmtime::Config;
+use wasmtime_wasi::FilePerms;
+use wasmtime_wasi::DirPerms;
 use anyhow::{anyhow, Context, Result};
 use std::sync::{Mutex, OnceLock};
 use std::{env, fs, process};
@@ -6,10 +9,13 @@ use wasmtime_wasi::preview1::add_to_linker_sync;
 use wasmtime_wasi::I32Exit;
 use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::WasiP1Ctx;
+use std::fs::File;
+use cap_std::fs::Dir;
 mod helpers;
 mod dl_functions;
 
-use dl_functions::{make_wasm_dlopen, make_wasm_dlcall};
+
+use dl_functions::{make_wasm_dlopen, make_wasm_dlcall, make_wasm_dlopen2};
 use helpers::{dependency_order, remove_duplicates, get_name_from_memory};
 
 struct GlobalWasmCtx {
@@ -30,7 +36,12 @@ impl Instances {
 
 impl GlobalWasmCtx {
     fn new() -> Self {
-        let engine = Engine::default();
+        let mut config = Config::new();
+        config.max_wasm_stack(16 * 1024 * 1024);
+        let engine = match Engine::new(&config) {
+            Ok(e) => e,
+            Err(_) => panic!("Failed to create engine with a Config!"),
+        };
         let linker = Linker::new(&engine);
 
         Self {
@@ -50,6 +61,7 @@ fn get_instances() -> &'static Instances {
     INSTANCES.get_or_init(|| Instances::new())
 }
 
+//noinspection ALL
 //TODO start refactoring logic out of main()
 fn main() -> Result<()> {
     let mut args = env::args();
@@ -72,11 +84,19 @@ fn main() -> Result<()> {
     let engine = &global_objects.engine;
 
     let mut wasi_ctx_builder = WasiCtxBuilder::new();
+    
+    let root_dir_as_file =  File::open("/Users/dragonulq/Repos/cpython")?;
+    let root_dir = Dir::from_std_file(root_dir_as_file);
+    wasi_ctx_builder.preopened_dir(root_dir, DirPerms::all(), FilePerms::all(), "/");
+    wasi_ctx_builder.env("PYTHONPATH", "/cross-build/wasm32-wasip1/build/lib.wasi-wasm32-3.15");
+    
+    wasi_ctx_builder.env("PYTHONHOME", "/");
+    
     let wasi_ctx = (&mut wasi_ctx_builder)
         .inherit_stdio()
         .args(&argv)
         .build_p1();
-
+   
     let mut store = Store::new(&engine, wasi_ctx);
     let instance:Instance = {
         let linker_guard = &mut global_objects.linker.lock().unwrap();
@@ -86,9 +106,11 @@ fn main() -> Result<()> {
         let modules_to_be_instantiated = dependency_order(&engine, &wasm_path.as_path())?;
         let dlopen_func = make_wasm_dlopen(&mut store);
         let dlcall_func = make_wasm_dlcall(&mut store);
+        let wasm_dlopen2 = make_wasm_dlopen2(&mut store);
                 
         linker.define(store.as_context_mut(), "host", "wasm_dlopen", dlopen_func)?;
         linker.define(store.as_context_mut(), "host", "wasm_dlcall", dlcall_func)?;
+        linker.define(store.as_context_mut(), "host", "wasm_dlopen2", wasm_dlopen2)?;
 
         let modules_to_be_instantiated_len = modules_to_be_instantiated.len();
         let mut instance = None;

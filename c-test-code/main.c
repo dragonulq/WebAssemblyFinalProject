@@ -9,6 +9,7 @@ int wasm_dlopen(const char* path, int path_length)
 int wasm_dlcall(int handle, const char* symbol, int symbol_length)
     __attribute__((import_module("host"), import_name("wasm_dlcall")));
 
+__attribute__((export_name("wasm_alloc")))
 void *wasm_alloc(int bytes) {
     if(bytes < 0) {
         perror("bytes to wasm_alloc was smaller than 0!");
@@ -24,9 +25,11 @@ void *wasm_alloc(int bytes) {
 
 }
 
+char *global_ptr;
 
 int main(int argc, char** argv) {
 
+    
 
 
     return 0;
