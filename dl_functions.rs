@@ -1,5 +1,7 @@
 use wasmtime::{AsContextMut, Caller, Func, Linker, Val, Module, Instance};
-use wasmtime_wasi::WasiP1Ctx;
+use wasmtime_wasi;
+use wasmtime_wasi::preview1::WasiP1Ctx;
+
 use crate::{get_global_objects, get_instances, get_name_from_memory};
 use crate::helpers::{read_bytes_from_module, write_bytes_to_module};
 
@@ -118,6 +120,7 @@ pub fn make_wasm_dlcall(mut store: impl AsContextMut<Data = WasiP1Ctx>) -> Func 
     );
 }
 
+// dummy host function to test importing from CPython
 pub fn make_wasm_dlopen2(mut store: impl AsContextMut<Data = WasiP1Ctx>) -> Func {
     
     return Func::wrap(

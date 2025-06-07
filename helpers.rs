@@ -4,7 +4,7 @@ use std::{
 };
 use std::collections::HashSet;
 use wasmtime::{Engine, Module, Extern, Caller, AsContext, AsContextMut, Memory};
-use wasmtime_wasi::WasiP1Ctx;
+use wasmtime_wasi::preview1::WasiP1Ctx;
 
 
 pub fn dependency_order(engine: &Engine, root: &Path) -> Result<Vec<(String, PathBuf)>> {

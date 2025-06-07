@@ -1,16 +1,20 @@
+use std::path::PathBuf;
 use wasmtime::Config;
-use wasmtime_wasi::FilePerms;
-use wasmtime_wasi::DirPerms;
 use anyhow::{anyhow, Context, Result};
 use std::sync::{Mutex, OnceLock};
 use std::{env, fs, process};
 use wasmtime::{AsContextMut, Engine, Linker, Module, Store, Instance};
-use wasmtime_wasi::preview1::add_to_linker_sync;
+
 use wasmtime_wasi::I32Exit;
-use wasmtime_wasi::WasiCtxBuilder;
-use wasmtime_wasi::WasiP1Ctx;
-use std::fs::File;
+use wasmtime_wasi::{WasiCtxBuilder};
+
+use wasmtime_wasi::preview1::WasiP1Ctx;
 use cap_std::fs::Dir;
+use wasmtime_wasi::DirPerms;
+use wasmtime_wasi::FilePerms;
+use wasmtime_wasi::preview1::add_to_linker_sync;
+
+
 mod helpers;
 mod dl_functions;
 
@@ -37,11 +41,12 @@ impl Instances {
 impl GlobalWasmCtx {
     fn new() -> Self {
         let mut config = Config::new();
-        config.max_wasm_stack(16 * 1024 * 1024);
+        config.max_wasm_stack(50 * 1024 * 1024);
         let engine = match Engine::new(&config) {
             Ok(e) => e,
             Err(_) => panic!("Failed to create engine with a Config!"),
         };
+        // let engine = Engine::default();
         let linker = Linker::new(&engine);
 
         Self {
@@ -61,7 +66,6 @@ fn get_instances() -> &'static Instances {
     INSTANCES.get_or_init(|| Instances::new())
 }
 
-//noinspection ALL
 //TODO start refactoring logic out of main()
 fn main() -> Result<()> {
     let mut args = env::args();
@@ -85,18 +89,20 @@ fn main() -> Result<()> {
 
     let mut wasi_ctx_builder = WasiCtxBuilder::new();
     
-    let root_dir_as_file =  File::open("/Users/dragonulq/Repos/cpython")?;
-    let root_dir = Dir::from_std_file(root_dir_as_file);
-    wasi_ctx_builder.preopened_dir(root_dir, DirPerms::all(), FilePerms::all(), "/");
-    wasi_ctx_builder.env("PYTHONPATH", "/cross-build/wasm32-wasip1/build/lib.wasi-wasm32-3.15");
     
+    let cwd: PathBuf = env::current_dir()?;
+    let host_path = cwd.join("cpython/cross-build/wasm32-wasip1");
+
+    wasi_ctx_builder.preopened_dir(host_path, "/", DirPerms::all(), FilePerms::all())?;
+    wasi_ctx_builder.env("PYTHONPATH", "/build/lib.wasi-wasm32-3.15:/Lib");
     wasi_ctx_builder.env("PYTHONHOME", "/");
-    
+
+
     let wasi_ctx = (&mut wasi_ctx_builder)
         .inherit_stdio()
         .args(&argv)
         .build_p1();
-   
+
     let mut store = Store::new(&engine, wasi_ctx);
     let instance:Instance = {
         let linker_guard = &mut global_objects.linker.lock().unwrap();
