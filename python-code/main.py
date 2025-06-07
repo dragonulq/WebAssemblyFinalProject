@@ -55,12 +55,15 @@ def get_shape_and_flatten(items):
 ###########################################################################################
 
 
-def ints_to_c_buffer_pack_into(arrays, scalars):
+def ints_to_c_buffer_pack_into(func_name, arrays, scalars):
+
+    library_name_bytes = func_name.encode('utf-8')
+    format_string = f'={len(library_name_bytes)}sx'
 
     scalars_no = len(scalars)
     arrays_no = len(arrays)
     item_sz  = ctypes.sizeof(ctypes.c_int)
-    buf_size = 3 * item_sz    # first elem is buffer len, next 2 elems are ints that say how many scalars and arrays are present
+    buf_size = 3 * item_sz + len(library_name_bytes) + 1    # first elem is buffer len, next 2 elems are ints that say how many scalars and arrays are present
     buf_size += scalars_no * item_sz
     flattened_arrays = []
     original_shapes = []
@@ -87,6 +90,9 @@ def ints_to_c_buffer_pack_into(arrays, scalars):
     struct.pack_into('i', buf_view, cursor, buf_size)
     cursor += item_sz
 
+    struct.pack_into(format_string, buf_view, cursor, library_name_bytes)
+    cursor += len(library_name_bytes) + 1
+
     struct.pack_into('2i', buf_view, cursor, scalars_no, arrays_no)
     cursor += item_sz * 2
 
@@ -104,7 +110,7 @@ def ints_to_c_buffer_pack_into(arrays, scalars):
         struct.pack_into(f'={len(flat_array)}i', buf_view, cursor, *flat_array)
         cursor += item_sz * len(flat_array)
 
-    return ptr
+    return ptr, buf_size
 
 
 def free_buffer(ptr):
@@ -115,8 +121,6 @@ def free_buffer(ptr):
 
 def main():
     pass
-
-
 
 
 if __name__ == "__main__":
