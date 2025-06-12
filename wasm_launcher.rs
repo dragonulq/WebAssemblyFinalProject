@@ -19,8 +19,9 @@ mod helpers;
 mod dl_functions;
 
 
-use dl_functions::{make_wasm_dlopen, make_wasm_dlcall, make_wasm_dlopen2};
+use dl_functions::{make_wasm_dlopen, make_wasm_dlcall, make_wasm_dlopen2, make_write_to_host_buffer};
 use helpers::{dependency_order, remove_duplicates, get_name_from_memory};
+use crate::dl_functions::make_read_from_host_buffer;
 
 struct GlobalWasmCtx {
     engine: Engine,
@@ -30,6 +31,9 @@ struct GlobalWasmCtx {
 struct Instances {
     instances: Mutex<Vec<Instance>>,
 }
+const BUFFER_SIZE: usize = 1000000000; // 10 ^ 9 bytes
+
+static mut DLCALL_BUFFER: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
 
 impl Instances {
     fn new() -> Self {
@@ -67,7 +71,12 @@ fn get_instances() -> &'static Instances {
 }
 
 //TODO start refactoring logic out of main()
+//TODO replace debug with optimized build CPython.wasm
 fn main() -> Result<()> {
+    unsafe {
+        let first_50 = &DLCALL_BUFFER[..50];
+        println!("First 50 bytes: {:?}", first_50);
+    }
     let mut args = env::args();
     let prog = args.next().expect("argv[0] missing");
     let wasm_path = match args
@@ -82,7 +91,7 @@ fn main() -> Result<()> {
             process::exit(1);
         }
     };
-
+    
     let argv: Vec<String> = env::args().skip(1).collect();
     let global_objects = get_global_objects();
     let engine = &global_objects.engine;
@@ -96,7 +105,7 @@ fn main() -> Result<()> {
     wasi_ctx_builder.preopened_dir(host_path, "/", DirPerms::all(), FilePerms::all())?;
     wasi_ctx_builder.env("PYTHONPATH", "/build/lib.wasi-wasm32-3.15:/Lib");
     wasi_ctx_builder.env("PYTHONHOME", "/");
-
+    
 
     let wasi_ctx = (&mut wasi_ctx_builder)
         .inherit_stdio()
@@ -113,10 +122,14 @@ fn main() -> Result<()> {
         let dlopen_func = make_wasm_dlopen(&mut store);
         let dlcall_func = make_wasm_dlcall(&mut store);
         let wasm_dlopen2 = make_wasm_dlopen2(&mut store);
+        let write_to_host_buffer = make_write_to_host_buffer(&mut store);
+        let read_from_host_buffer = make_read_from_host_buffer(&mut store);
                 
         linker.define(store.as_context_mut(), "host", "wasm_dlopen", dlopen_func)?;
         linker.define(store.as_context_mut(), "host", "wasm_dlcall", dlcall_func)?;
         linker.define(store.as_context_mut(), "host", "wasm_dlopen2", wasm_dlopen2)?;
+        linker.define(store.as_context_mut(), "host", "write_to_host_buffer", write_to_host_buffer)?;
+        linker.define(store.as_context_mut(), "host", "read_from_host_buffer", read_from_host_buffer)?;
 
         let modules_to_be_instantiated_len = modules_to_be_instantiated.len();
         let mut instance = None;
@@ -158,6 +171,10 @@ fn main() -> Result<()> {
                 return Err(e).context("failed to run guest")?;
             }
         }
+    }
+    unsafe {
+        let first_50 = &DLCALL_BUFFER[..50];
+        println!("First 50 bytes: {:?}", first_50);
     }
     Ok(())
 }
