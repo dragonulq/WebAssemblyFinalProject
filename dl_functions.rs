@@ -57,7 +57,7 @@ pub fn make_wasm_dlopen(mut store: impl AsContextMut<Data = WasiP1Ctx>) -> Func 
     return Func::wrap(
         store.as_context_mut(),
         |mut caller: Caller<'_, WasiP1Ctx>, ptr: i32, library_len: i32| -> i32 {
-            println!("Executing wasm_dlopen..."); // TODO check here if it is already in instances
+            // println!("Executing wasm_dlopen..."); // TODO check here if it is already in instances
             if library_len > LIBRARY_PATH_MAX_LENGTH {
                 panic!("Length of library to dlopen cannot be larger than {}!", LIBRARY_PATH_MAX_LENGTH);
             }
@@ -86,7 +86,7 @@ pub fn make_wasm_dlopen(mut store: impl AsContextMut<Data = WasiP1Ctx>) -> Func 
             let module = Module::from_file(engine, &library_name).unwrap(); // TODO check if it is persisted in the OS
             let instance = linker.instantiate(store, &module).unwrap(); // TODO we need to first instantiate its requirements
             instances.push(instance);                                           //TODO error handling
-            println!("Loaded library: {}", &library_name);
+            // println!("Loaded library: {}", &library_name);
             (instances.len() - 1) as i32
         },
     );
@@ -100,7 +100,7 @@ pub fn make_wasm_dlcall(mut store: impl AsContextMut<Data = WasiP1Ctx>) -> Func 
     return Func::wrap(
         store.as_context_mut(),
         |mut caller: Caller<'_, WasiP1Ctx>, handle: i32, symbol_ptr:i32, symbol_len:i32, buffer_size: i32| -> i32 {
-            println!("Executing dlcall function");
+            // println!("Executing dlcall function");
             
             //Safety check, valid handle to get instance
             

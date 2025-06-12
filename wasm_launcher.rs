@@ -73,10 +73,10 @@ fn get_instances() -> &'static Instances {
 //TODO start refactoring logic out of main()
 //TODO replace debug with optimized build CPython.wasm
 fn main() -> Result<()> {
-    unsafe {
-        let first_50 = &DLCALL_BUFFER[..50];
-        println!("First 50 bytes: {:?}", first_50);
-    }
+    // unsafe {
+    //     let first_50 = &DLCALL_BUFFER[..52];
+    //     println!("First 50 bytes: {:?}", first_50);
+    // }
     let mut args = env::args();
     let prog = args.next().expect("argv[0] missing");
     let wasm_path = match args
@@ -91,21 +91,20 @@ fn main() -> Result<()> {
             process::exit(1);
         }
     };
-    
+
     let argv: Vec<String> = env::args().skip(1).collect();
     let global_objects = get_global_objects();
     let engine = &global_objects.engine;
 
     let mut wasi_ctx_builder = WasiCtxBuilder::new();
-    
-    
+
     let cwd: PathBuf = env::current_dir()?;
     let host_path = cwd.join("cpython/cross-build/wasm32-wasip1");
 
     wasi_ctx_builder.preopened_dir(host_path, "/", DirPerms::all(), FilePerms::all())?;
     wasi_ctx_builder.env("PYTHONPATH", "/build/lib.wasi-wasm32-3.15:/Lib");
     wasi_ctx_builder.env("PYTHONHOME", "/");
-    
+
 
     let wasi_ctx = (&mut wasi_ctx_builder)
         .inherit_stdio()
@@ -172,9 +171,9 @@ fn main() -> Result<()> {
             }
         }
     }
-    unsafe {
-        let first_50 = &DLCALL_BUFFER[..50];
-        println!("First 50 bytes: {:?}", first_50);
-    }
+    // unsafe {
+    //     let first_50 = &DLCALL_BUFFER[..52];
+    //     println!("First 50 bytes: {:?}", first_50);
+    // }
     Ok(())
 }

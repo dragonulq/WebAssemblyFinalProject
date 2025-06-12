@@ -3,11 +3,67 @@ import struct
 from host_functions import call_host
 from host_functions import wasm_dlopen, wasm_dlcall, write_to_host_buffer
 from collections.abc import Iterable
+import random
 
 
 #############################################
 #############################################
 
+
+def deserialize_xtensor_result(buffer: bytes):
+
+    cursor = 0
+
+    try:
+        (ndim,) = struct.unpack_from('<i', buffer, cursor)
+        cursor += 4
+    except struct.error:
+        raise ValueError("Buffer is too small to contain ndim.")
+
+
+    shape_format = f'<{ndim}I'
+    shape_size = struct.calcsize(shape_format)
+
+    try:
+        shape = struct.unpack_from(shape_format, buffer, cursor)
+        cursor += shape_size
+    except struct.error:
+        raise ValueError("Buffer is too small to contain the shape.")
+
+
+    num_elements = 1
+    for dim_size in shape:
+        num_elements *= dim_size
+
+    data_format = f'<{num_elements}i'
+
+    try:
+        flat_data = list(struct.unpack_from(data_format, buffer, cursor))
+    except struct.error:
+        raise ValueError("Buffer has incorrect data size for the given shape.")
+
+    if not shape:
+        return []
+
+
+    def reshape_recursive(data_iterator, current_shape):
+
+        if not current_shape:
+
+            return next(data_iterator)
+
+
+        first_dim, rest_of_shape = current_shape[0], current_shape[1:]
+
+        return [
+            reshape_recursive(data_iterator, rest_of_shape)
+            for _ in range(first_dim)
+        ]
+
+    return reshape_recursive(iter(flat_data), shape)
+
+#############################################
+#############################################
 
 def get_shape_and_flatten(items):
 
@@ -96,31 +152,36 @@ def serialize_dlcall_args(func_name, arrays, scalars):
 
 
 def main():
-    values1 = [12,3,4,5,6,6,2,324,12,1]
+    values1 = [0,12,3,4,5,6,6,2,324,12,1]
     values2 = [12,3,4,5,6,6,2,2,2,2,1]
-    c = [12,3,4,5,6,6,1,10,49]
-    d = [12,3,4,5,6,6,1,1000]
+    # values1 + values2
+    # [12, 15, 7, 9, 11, 12, 8, 4, 326, 14, 2]
 
-    handle = wasm_dlopen("xtensor_example.wasm")
-    print("handle from wasm_dlopen should be 0 but is ",handle)
-    addr, buf_size = serialize_dlcall_args("some_random_func", [values2, values1], [1,2,3,4])
-    # print("addr where we can see serialized args is: " ,addr)
-    # print("buf_size is: " , buf_size)
-    result_len = wasm_dlcall(handle, "aa", addr)
-    print("result_len in python is: ",result_len)
 
-    # wasm_dlopen("some_str")
-    # values = array.array('I', values)
-    # memoryview(values)
-    # values2 = array.array('I', values2)
-    # memoryview(values2)
-    # handle = wasm_dlopen()
-    # write_args(a, b)
+    # Generate first 3x4 matrix
+    matrix1 = [[random.randint(1, 9) for _ in range(4)] for _ in range(3)]
 
-    # wasm_dlcall(handle, "add", )
-    # list = read_results()
-    # print(list)
+    # Generate second 3x4 matrix
+    matrix2 = [[random.randint(1, 9) for _ in range(4)] for _ in range(3)]
 
+    # Print both matrices with nice alignment
+    print("Matrix 1:")
+    for row in matrix1:
+        print(" ".join(f"{num:2d}" for num in row))
+
+    print("\nMatrix 2:")
+    for row in matrix2:
+        print(" ".join(f"{num:2d}" for num in row))
+
+    handle = wasm_dlopen("xtensor_adapter.wasm")
+    addr, buf_size = serialize_dlcall_args("add", [matrix1, matrix2], [])
+    result_raw_bytes = wasm_dlcall(handle, "add", addr)
+    result_list = deserialize_xtensor_result(result_raw_bytes)
+
+    print("\nResult of adding mattrices:")
+    for row in result_list:
+        print(" ".join(f"{num:2d}" for num in row))
+    print("\n")
 
 
 if __name__ == "__main__":
