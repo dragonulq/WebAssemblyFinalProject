@@ -11,9 +11,7 @@ pub fn dependency_order(engine: &Engine, root: &Path) -> Result<Vec<(String, Pat
     dfs(engine, root)
 }
 fn dfs(engine: &Engine, path: &Path) -> Result<Vec<(String, PathBuf)>> {
-/*TODO rethink the algorithm or probably just which duplicates to remove
-   either the second ones in which the implementation is correct or the first ones
-    in which case we traverse the list backwards*/
+
     let module = Module::from_file(engine, path) //TODO persisting to OS could come in handy here
         .with_context(|| format!("Could not compile {}", path.display()))?;
 
@@ -35,7 +33,7 @@ fn dfs(engine: &Engine, path: &Path) -> Result<Vec<(String, PathBuf)>> {
     list.push((name, path.to_path_buf()));
     Ok(list)
 }
-//TODO does this iter preserve order, probably yes, but check
+
 pub fn remove_duplicates(vec: Vec<(String, PathBuf)>) -> Vec<(String, PathBuf)> {
     let mut seen_strings = HashSet::new();
     vec.into_iter()

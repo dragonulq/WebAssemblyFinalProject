@@ -19,7 +19,7 @@ mod helpers;
 mod dl_functions;
 
 
-use dl_functions::{make_wasm_dlopen, make_wasm_dlcall, make_wasm_dlopen2, make_write_to_host_buffer};
+use dl_functions::{make_wasm_dlopen, make_wasm_dlcall, make_write_to_host_buffer};
 use helpers::{dependency_order, remove_duplicates, get_name_from_memory};
 use crate::dl_functions::make_read_from_host_buffer;
 
@@ -50,7 +50,7 @@ impl GlobalWasmCtx {
             Ok(e) => e,
             Err(_) => panic!("Failed to create engine with a Config!"),
         };
-        // let engine = Engine::default();
+        
         let linker = Linker::new(&engine);
 
         Self {
@@ -73,10 +73,7 @@ fn get_instances() -> &'static Instances {
 //TODO start refactoring logic out of main()
 //TODO replace debug with optimized build CPython.wasm
 fn main() -> Result<()> {
-    // unsafe {
-    //     let first_50 = &DLCALL_BUFFER[..52];
-    //     println!("First 50 bytes: {:?}", first_50);
-    // }
+    
     let mut args = env::args();
     let prog = args.next().expect("argv[0] missing");
     let wasm_path = match args
@@ -120,13 +117,13 @@ fn main() -> Result<()> {
         let modules_to_be_instantiated = dependency_order(&engine, &wasm_path.as_path())?;
         let dlopen_func = make_wasm_dlopen(&mut store);
         let dlcall_func = make_wasm_dlcall(&mut store);
-        let wasm_dlopen2 = make_wasm_dlopen2(&mut store);
+        
         let write_to_host_buffer = make_write_to_host_buffer(&mut store);
         let read_from_host_buffer = make_read_from_host_buffer(&mut store);
                 
         linker.define(store.as_context_mut(), "host", "wasm_dlopen", dlopen_func)?;
         linker.define(store.as_context_mut(), "host", "wasm_dlcall", dlcall_func)?;
-        linker.define(store.as_context_mut(), "host", "wasm_dlopen2", wasm_dlopen2)?;
+        
         linker.define(store.as_context_mut(), "host", "write_to_host_buffer", write_to_host_buffer)?;
         linker.define(store.as_context_mut(), "host", "read_from_host_buffer", read_from_host_buffer)?;
 
@@ -171,9 +168,6 @@ fn main() -> Result<()> {
             }
         }
     }
-    // unsafe {
-    //     let first_50 = &DLCALL_BUFFER[..52];
-    //     println!("First 50 bytes: {:?}", first_50);
-    // }
+  
     Ok(())
 }
