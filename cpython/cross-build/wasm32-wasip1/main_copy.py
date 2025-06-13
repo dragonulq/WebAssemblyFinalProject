@@ -4,7 +4,7 @@ from host_functions import call_host
 from host_functions import wasm_dlopen, wasm_dlcall, write_to_host_buffer
 from collections.abc import Iterable
 import random
-
+import time
 
 #############################################
 #############################################
@@ -149,7 +149,14 @@ def serialize_dlcall_args(func_name, arrays, scalars):
 
 #############################################
 #############################################
+def write_timing(file_content):
+    file_name = "timings_instance_not_alive.txt"
+    try:
+        with open(file_name, "a") as f:
+            f.write(file_content)
 
+    except IOError as e:
+        print(f"Error writing to file '{file_name}': {e}")
 
 def main():
     values1 = [0,12,3,4,5,6,6,2,324,12,1]
@@ -159,10 +166,10 @@ def main():
 
 
     # Generate first 3x4 matrix
-    matrix1 = [[random.randint(1, 9) for _ in range(4)] for _ in range(3)]
+    matrix1 = [[random.randint(1, 9) for _ in range(30)] for _ in range(20)]
 
     # Generate second 3x4 matrix
-    matrix2 = [[random.randint(1, 9) for _ in range(4)] for _ in range(3)]
+    matrix2 = [[random.randint(1, 9) for _ in range(30)] for _ in range(20)]
 
     # Print both matrices with nice alignment
     print("Matrix 1:")
@@ -173,10 +180,48 @@ def main():
     for row in matrix2:
         print(" ".join(f"{num:2d}" for num in row))
 
+    print("\n")
+    print("Timings:\n")
+
+    write_timing("--------------START---------------\n\n")
+    start_time = time.perf_counter()
     handle = wasm_dlopen("xtensor_adapter.wasm")
+    end_time = time.perf_counter()
+    elapsed_time = end_time - start_time
+
+    write_timing(f"Time to dlopen was: {elapsed_time * 1000}ms\n")
+
+
+
+
+    start_time = time.perf_counter()
     addr, buf_size = serialize_dlcall_args("add", [matrix1, matrix2], [])
+    end_time = time.perf_counter()
+    elapsed_time = end_time - start_time
+    print("Time to serialize was: ", elapsed_time * 1000, "ms")
+    write_timing(f"Time to serialize was: {elapsed_time * 1000}ms\n")
+
+
+    start_time = time.perf_counter()
     result_raw_bytes = wasm_dlcall(handle, "add", addr)
+    end_time = time.perf_counter()
+    elapsed_time = end_time - start_time
+    print("Time to dlcall was: ", elapsed_time * 1000, "ms")
+    write_timing(f"Time to dlcall was: {elapsed_time * 1000}ms\n")
+
+
+    start_time = time.perf_counter()
     result_list = deserialize_xtensor_result(result_raw_bytes)
+    end_time = time.perf_counter()
+    elapsed_time = end_time - start_time
+    print("Time to deserialize was: ", elapsed_time * 1000, "ms")
+    write_timing(f"Time to deserialize was: {elapsed_time * 1000}ms\n\n")
+    write_timing("--------------END---------------\n\n")
+
+
+
+
+
 
     print("\nResult of adding mattrices:")
     for row in result_list:

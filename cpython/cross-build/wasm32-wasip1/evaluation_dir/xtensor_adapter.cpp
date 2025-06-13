@@ -11,7 +11,9 @@
 #include <vector>
 #include <string_view>
 #include <cassert>
+#include <chrono>
 #include <stdexcept>
+#include <fstream>
 
 extern int write_to_host_buffer(uint8_t* data, int data_len)
     __attribute__((import_module("host"), import_name("write_to_host_buffer")));
@@ -33,7 +35,20 @@ struct Deserialized
  *  Assumption:
  *     host is little-endian with 4-byte 2’s-complement int == Python’s int
  */
+int write_log_to_virtual_file(const std::string& log_message) {
+    // Open the file in append mode.
+    const std::string LOG_FILENAME = "/timings_instance_not_alive.txt";
+    std::ofstream outfile(LOG_FILENAME, std::ios_base::app);
 
+    if (!outfile.is_open()) {
+        std::cerr << "Wasm Error: Could not open virtual file " << LOG_FILENAME << " for writing." << std::endl;
+        return 0;
+    }
+
+    outfile << log_message << std::endl; // Write the message followed by a newline
+    outfile.close(); // Close the file
+    return 1;
+}
 
 inline Deserialized deserialize(const std::uint8_t* buffer, std::size_t nbytes)
 {
@@ -52,7 +67,6 @@ inline Deserialized deserialize(const std::uint8_t* buffer, std::size_t nbytes)
     int buf_size = read_int();
     assert(static_cast<std::size_t>(buf_size) == nbytes);
 
-    // func name: N bytes + '\0' terminator
     const char*  name_start = reinterpret_cast<const char*>(cur);
 
     std::size_t max_remaining = nbytes - (cur - buffer);  // bytes left in blob
@@ -108,9 +122,6 @@ inline Deserialized deserialize(const std::uint8_t* buffer, std::size_t nbytes)
 
 extern "C" {
 
-// Keep in mind a few things to check that could ruin things
-// casting from size_t to int and the other way around
-// passing around char* instead of uint8_t*, although it should be fine,c but add it to the list of assumptions
 
 int xtensor_cpp_entry_point(int buffer_size) {
 
@@ -144,8 +155,22 @@ int xtensor_cpp_entry_point(int buffer_size) {
                         fprintf(stderr, "Error: Shapes of arrays are not identical for addition.\n");
                         result_code = -11;
                     } else {
+                        const std::string LOG_FILENAME = "wasm_computation_log.txt";
+                        auto start = std::chrono::high_resolution_clock::now();
 
                         xt::xarray<int> result = a + b;
+
+                        auto end = std::chrono::high_resolution_clock::now();
+                        std::chrono::nanoseconds duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+
+
+                        double duration_ms = static_cast<double>(duration_ns.count()) / 1e6;
+                        std::stringstream ss;
+                        ss << std::fixed << std::setprecision(6) << "Xtensor computation took: " << duration_ms << " ms";
+                        std::string log_message = ss.str();
+                        if (write_log_to_virtual_file(log_message)) {
+                            printf("Wrote to timings file from C++!\n");
+                        }
 
 
                         const auto& shape = result.shape();
