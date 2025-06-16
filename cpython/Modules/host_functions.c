@@ -60,7 +60,7 @@ static PyObject* ext_call_wasm_dlcall(PyObject* self, PyObject* args) {
     void* data_ptr = args_buffer.buf;
     Py_ssize_t args_buffer_len = args_buffer.len;
 
-     Make absolutely sure that the size fits in an int
+     //Make absolutely sure that the size fits in an int
     assert(args_buffer_len <= INT_MAX && args_buffer_len >= INT_MIN);
     int data_len = (int) args_buffer_len;
     write_to_host_buffer(data_ptr, data_len);
